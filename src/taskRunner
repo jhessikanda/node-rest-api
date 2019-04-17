@@ -1,0 +1,72 @@
+const fs = require('fs');
+const readline = require('readline');
+const RestClient = require('node-rest-client').Client;
+const restClient = new RestClient();
+
+const allLines = [];
+let linesProcessedCount = 0;
+
+const csvLines = readline.createInterface({
+    input: fs.createReadStream('./process.csv')
+});
+
+csvLines.on('line', (line) => {
+    allLines.push(`"${line}"`);
+});
+
+csvLines.on('close', () => {
+    runner();
+});
+
+const runner = () => {
+
+    const execute = () => {
+        const chunkSize = 500;
+        const linesToProcess = allLines.slice(linesProcessedCount, linesProcessedCount + chunkSize);
+        linesProcessedCount += chunkSize;
+
+        if (linesToProcess.length == 0) {
+            console.log(`Finished execution of ${linesProcessedCount} lines.`);
+            process.exit(0);
+        }
+
+        const first = linesToProcess[0];
+        const last = linesToProcess[linesToProcess.length-1];
+
+        callTaskApi(linesToProcess)
+        .then((result) => {
+            console.log(`finish the chunk: [first:${first}, last:${last} result:${result}]`);
+            runner();
+        }).catch(err => {
+            console.log(`finish the chunk with error: ${err.message} [first:${first}, last:${last}]`);
+            process.exit(0);
+        });
+    }
+
+    setTimeout(() => {
+        execute();
+    }, 5000);
+} 
+
+
+const callTaskApi = (payloadArray) => {
+    const payload = {
+        headers: {
+            "Authorization": "Bearer <auth_token>"
+        },
+        data: `[${payloadArray.join(',')}]` 
+    };
+
+    return new Promise((resolve, reject) => {
+        
+        const request = restClient.post('https://host.com/tasks/RefundOffshoreProductMigrationTask', payload, (data, response) => {
+            resolve(data);
+        });
+        
+        request.on('error', (err) => {
+            console.log(`request error: ${err.message}`);
+            reject(err);
+        });
+
+    });
+}
